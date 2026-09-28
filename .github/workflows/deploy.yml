@@ -41,7 +41,7 @@ jobs:
             --source-name "我的飞牛应用商店" \
             --source-author "jiankujidu" \
             --homepage "https://github.com/jiankujidu/mystore.github.io" \
-            --base-url "https://mystore.github.io"
+            --base-url "https://jiankujidu.github.io/mystore.github.io"
 
       - name: Assemble site
         run: |
