@@ -1,0 +1,13 @@
+{
+    ".url": {
+        "mystore.main": {
+            "title": "MyStore 应用商城",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "http",
+            "port": "",
+            "url": "/cgi/ThirdParty/mystore/index.cgi/",
+            "allUsers": true
+        }
+    }
+}
