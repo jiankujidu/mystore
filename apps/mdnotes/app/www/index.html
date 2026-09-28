@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown 备忘录</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f4f5f7; color: #1a1a1a; height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    background: #fff; border-bottom: 1px solid #e8eaed; padding: 12px 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header .logo { font-weight: 700; font-size: 16px; color: #2f6bff; }
+  header select {
+    padding: 6px 10px; border-radius: 8px; border: 1px solid #e8eaed; background: #fafbfc; font-size: 13px;
+  }
+  header .spacer { flex: 1; }
+  header button {
+    border: 1px solid #e8eaed; background: #fff; border-radius: 8px; padding: 6px 12px;
+    font-size: 13px; cursor: pointer; color: #6b7280;
+  }
+  header button:hover { color: #1a1a1a; border-color: #cfd3da; }
+  header button.primary { background: #2f6bff; color: #fff; border-color: #2f6bff; }
+  .wrap { flex: 1; display: flex; min-height: 0; }
+  .pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .pane + .pane { border-left: 1px solid #e8eaed; }
+  .pane-title { font-size: 12px; color: #6b7280; padding: 8px 14px; background: #fafbfc; border-bottom: 1px solid #e8eaed; }
+  textarea {
+    flex: 1; border: none; outline: none; resize: none; padding: 16px;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.7;
+    background: #fff; color: #1a1a1a;
+  }
+  .preview { flex: 1; overflow: auto; padding: 16px 20px; background: #fff; line-height: 1.75; }
+  .preview h1, .preview h2, .preview h3 { margin: 14px 0 8px; }
+  .preview h1 { font-size: 22px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+  .preview h2 { font-size: 18px; }
+  .preview p { margin: 8px 0; }
+  .preview code { background: #f0f2f5; padding: 2px 6px; border-radius: 4px; font-size: 12.5px; }
+  .preview pre { background: #f6f7f9; padding: 12px; border-radius: 8px; overflow: auto; margin: 8px 0; }
+  .preview pre code { background: none; padding: 0; }
+  .preview blockquote { border-left: 3px solid #2f6bff; margin: 8px 0; padding: 4px 14px; color: #6b7280; }
+  .preview a { color: #2f6bff; }
+  .preview ul, .preview ol { padding-left: 22px; margin: 8px 0; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1a1a1a; color: #fff; padding: 9px 18px; border-radius: 9px; font-size: 13px;
+    opacity: 0; transition: opacity .25s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">📝 Markdown 备忘录</span>
+  <select id="notes" onchange="switchNote()"></select>
+  <button onclick="newNote()">+ 新笔记</button>
+  <span class="spacer"></span>
+  <button class="primary" onclick="save()">保存</button>
+</header>
+<div class="wrap">
+  <div class="pane">
+    <div class="pane-title">编辑 (Markdown)</div>
+    <textarea id="editor" placeholder="在这里写 Markdown…"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-title">预览</div>
+    <div class="preview" id="preview"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY = 'mdnotes_v1';
+let notes = JSON.parse(localStorage.getItem(KEY) || '{}');
+let current = null;
+
+function uid() { return 'n' + Date.now(); }
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1500); }
+
+function renderList() {
+  const sel = document.getElementById('notes');
+  sel.innerHTML = Object.entries(notes).map(([id, n]) =>
+    `<option value="${id}">${n.title || '未命名'}</option>`).join('');
+  if (current && notes[current]) sel.value = current;
+}
+function switchNote() {
+  current = document.getElementById('notes').value;
+  const n = notes[current];
+  document.getElementById('editor').value = n ? n.body : '';
+  renderPreview();
+}
+function newNote() {
+  const id = uid();
+  notes[id] = { title: '未命名 ' + new Date().toLocaleTimeString(), body: '# 新笔记\n\n开始写点什么…' };
+  current = id; renderList(); switchNote(); save();
+}
+function save() {
+  if (!current) return;
+  const body = document.getElementById('editor').value;
+  const firstLine = (body.split('\n').find(l => l.trim()) || '').replace(/^#+\s*/, '').trim();
+  notes[current] = { title: firstLine || '未命名', body };
+  localStorage.setItem(KEY, JSON.stringify(notes));
+  renderList(); toast('已保存');
+}
+// minimal markdown -> html
+function md(src) {
+  let h = src
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^> (.*)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/^- (.*)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n\n/g, '<br>');
+  return h;
+}
+function renderPreview() { document.getElementById('preview').innerHTML = md(document.getElementById('editor').value); }
+
+document.getElementById('editor').addEventListener('input', () => { renderPreview(); save(); });
+
+if (Object.keys(notes).length === 0) newNote();
+else { current = Object.keys(notes)[0]; renderList(); switchNote(); }
+</script>
+</body>
+</html>
