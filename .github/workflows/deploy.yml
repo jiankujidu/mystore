@@ -1,0 +1,62 @@
+name: Deploy Store to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix script permissions
+        run: |
+          find apps -type f -path "*/cmd/*" -exec chmod +x {} \;
+          find apps -type f -name "*.cgi" -exec chmod +x {} \;
+
+      - name: Download fnpack (Linux amd64)
+        run: |
+          curl -L -o /usr/local/bin/fnpack "https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64"
+          chmod +x /usr/local/bin/fnpack
+
+      - name: Build FPK + fnpack.json
+        run: |
+          python3 build.py \
+            --fnpack /usr/local/bin/fnpack \
+            --source-name "我的飞牛应用商店" \
+            --source-author "jiankujidu" \
+            --homepage "https://github.com/jiankujidu/mystore.github.io" \
+            --base-url "https://mystore.github.io"
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r dist/fnpack.json _site/
+          cp -r dist/fpk _site/ 2>/dev/null || true
+          cp -r dist/icons _site/ 2>/dev/null || true
+          cp -r dist/previews _site/ 2>/dev/null || true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

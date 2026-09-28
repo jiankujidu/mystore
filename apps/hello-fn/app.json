@@ -1,0 +1,10 @@
+{
+  "display_name": "Hello飞牛",
+  "desc": "飞牛NAS示例静态应用，展示最小可运行 FPK 包结构",
+  "platform": ["all"],
+  "categories": ["系统工具"],
+  "run_as": "package",
+  "install_type": "",
+  "is_docker": false,
+  "maintainer": "fn-store"
+}
