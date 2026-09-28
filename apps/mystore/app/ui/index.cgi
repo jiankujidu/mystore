@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASE_PATH="/var/apps/hello-fn/target/www"
+BASE_PATH="/var/apps/mystore/target/www"
 URI_NO_QUERY="${REQUEST_URI%%\?*}"
 REL_PATH="/"
 

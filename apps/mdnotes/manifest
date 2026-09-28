@@ -1,5 +1,5 @@
 appname               = mdnotes
-version               = 1.0.0
+version               = 1.0.1
 display_name          = Markdown 备忘录
 desc                  = 飞牛 NAS 上的轻量 Markdown 笔记，纯前端、本地存储，无需后端
 platform              = all
