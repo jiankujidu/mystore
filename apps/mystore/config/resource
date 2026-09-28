@@ -1,11 +1,11 @@
 {
-  "data-share": {
-    "shares": [
+  "network": {
+    "ports": [
       {
-        "name": "hello-fn"
-      },
-      {
-        "name": "hello-fn/data"
+        "name": "mystore",
+        "protocol": "tcp",
+        "port": 8011,
+        "custom": true
       }
     ]
   }

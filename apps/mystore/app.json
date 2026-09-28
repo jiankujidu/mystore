@@ -7,5 +7,5 @@
   "install_type": "",
   "is_docker": false,
   "maintainer": "jiankujidu",
-  "changelog": "全新 UI：对齐飞牛官方应用中心设计（侧边栏/轮播/详情页/设置）"
+  "changelog": "v1.1.0：端口服务模式（默认 8011，可自定义 APP_PORT），桌面图标直接以端口访问"
 }

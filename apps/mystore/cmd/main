@@ -3,8 +3,26 @@
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 
-# write the command to start your program here 
-CMD=""
+# 服务端口（可自定义）：优先用 config/resource 注册的值，其次环境变量 APP_PORT，默认 8011
+DEFAULT_PORT=8011
+PORT="$DEFAULT_PORT"
+if [ -n "$TRIM_PKGVAR" ] && [ -f "${TRIM_PKGVAR}/config/resource" ]; then
+    P=$(grep -oE '"port"[[:space:]]*:[[:space:]]*[0-9]+' "${TRIM_PKGVAR}/config/resource" 2>/dev/null \
+        | grep -oE '[0-9]+' | head -1)
+    [ -n "$P" ] && PORT="$P"
+fi
+[ -n "$APP_PORT" ] && PORT="$APP_PORT"
+
+WEB_ROOT="${TRIM_PKGVAR}/www"
+# www 实际随应用安装到 /var/apps/mystore/target/www，TRIM_PKGVAR 是 /var/apps/mystore/var
+SERVE_DIR="/var/apps/mystore/target/www"
+if [ ! -d "${SERVE_DIR}" ]; then
+    SERVE_DIR="${WEB_ROOT}"
+fi
+
+# 启动命令：飞牛 fnOS（Debian 系）自带 python3，用它起静态 HTTP 服务
+# 监听 0.0.0.0:PORT，桌面点图标 / 直接访问 NAS 地址:PORT/ 即打开商城
+CMD="python3 -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR} 2>&1 || { echo 'python3 not available' >> ${LOG_FILE}; exec sleep 3600; }"
 
 log_msg() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}
