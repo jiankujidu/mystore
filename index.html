@@ -129,7 +129,7 @@
 <body>
 <header>
   <div class="wrap" style="padding-bottom:0">
-    <h1 id="storeName">我的飞牛应用商店</h1>
+    <h1 id="storeName">MyStore</h1>
     <div class="sub" id="storeDesc">自托管 fnOS 应用分发源 · 支持 FnDepot 客户端</div>
     <div class="author" id="storeAuthor"></div>
     <div class="source-bar">
@@ -177,7 +177,7 @@ async function load() {
   }
   document.getElementById('srcUrl').textContent = SOURCE_URL;
   const si = DATA.source_info || {};
-  document.getElementById('storeName').textContent = si.name || '我的飞牛应用商店';
+  document.getElementById('storeName').textContent = si.name || 'MyStore';
   if (si.description) document.getElementById('storeDesc').textContent = si.description;
   if (si.author) document.getElementById('storeAuthor').textContent = '维护者：' + si.author;
   buildCats();
