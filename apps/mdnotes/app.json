@@ -1,0 +1,11 @@
+{
+  "display_name": "Markdown 备忘录",
+  "desc": "飞牛 NAS 上的轻量 Markdown 笔记，纯前端、本地存储，无需后端。支持实时预览、多笔记切换。",
+  "platform": ["all"],
+  "categories": ["生活服务"],
+  "run_as": "package",
+  "install_type": "",
+  "is_docker": false,
+  "maintainer": "jiankujidu",
+  "changelog": "首发：基础 Markdown 编辑 + 本地存储"
+}
