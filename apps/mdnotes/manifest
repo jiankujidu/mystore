@@ -1,0 +1,12 @@
+appname               = mdnotes
+version               = 1.0.0
+display_name          = Markdown 备忘录
+desc                  = 飞牛 NAS 上的轻量 Markdown 笔记，纯前端、本地存储，无需后端
+platform              = all
+source                = thirdparty
+maintainer            = jiankujidu
+distributor           = jiankujidu
+desktop_uidir         = ui
+desktop_applaunchname = mdnotes.main
+ctl_stop              = false
+checkport             = false
