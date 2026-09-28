@@ -1,0 +1,11 @@
+{
+  "display_name": "MyStore 应用商城",
+  "desc": "飞牛 NAS 内置应用商城：浏览 MyStore 仓库中的应用，一键下载 .fpk 安装包。",
+  "platform": ["all"],
+  "categories": ["系统工具"],
+  "run_as": "package",
+  "install_type": "",
+  "is_docker": false,
+  "maintainer": "jiankujidu",
+  "changelog": "首发：内置商城客户端，在线浏览 + 下载 FPK"
+}
