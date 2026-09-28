@@ -3,178 +3,163 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>我的飞牛应用商店</title>
+<title>MyStore · 应用中心</title>
 <style>
   :root {
-    --bg: #0f1115;
-    --card: #1a1d24;
-    --card-hover: #22262f;
-    --accent: #4f8cff;
-    --accent-2: #6f6cff;
-    --text: #e8eaed;
-    --text-dim: #9aa0a6;
-    --border: #2a2e37;
-    --green: #2ecc71;
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #e8eaed;
+    --text: #1a1a1a;
+    --text-dim: #6b7280;
+    --primary: #2f6bff;
+    --primary-hover: #1f5bf0;
+    --primary-soft: #eaf1ff;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.6; min-height: 100vh;
   }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px 60px; }
 
-  /* Header */
-  header {
-    padding: 48px 0 32px;
-    text-align: center;
-    background: radial-gradient(circle at 50% 0%, rgba(79,140,255,0.18), transparent 60%);
+  /* Top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(255,255,255,0.85); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
   }
-  header h1 {
-    font-size: 34px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+  .topbar-inner {
+    max-width: 1180px; margin: 0 auto; padding: 12px 24px;
+    display: flex; align-items: center; gap: 16px;
   }
-  header .sub { color: var(--text-dim); margin-top: 8px; font-size: 14px; }
-  header .author { color: var(--accent); font-size: 13px; margin-top: 4px; }
-
-  /* Source bar */
-  .source-bar {
-    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
-    margin: 22px auto 0; max-width: 640px;
+  .logo {
+    display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px;
   }
-  .source-bar code {
-    flex: 1; min-width: 240px;
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 8px; padding: 10px 14px; font-size: 12.5px;
-    color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .page-bar {
-    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
-    align-items: center; margin: 14px auto 0; max-width: 640px;
-    padding: 10px 14px; border-radius: 10px;
-    background: rgba(46,204,113,0.10); border: 1px solid rgba(46,204,113,0.35);
-  }
-  .page-bar .page-label { color: var(--green); font-size: 12.5px; font-weight: 600; }
-  .page-bar code {
-    flex: 1; min-width: 200px; text-align: center;
-    color: var(--text); font-size: 12.5px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .btn {
-    border: none; cursor: pointer; border-radius: 8px;
-    padding: 10px 18px; font-size: 13px; font-weight: 600;
-    transition: transform .1s, filter .15s; white-space: nowrap;
-  }
-  .btn:active { transform: scale(0.97); }
-  .btn-primary { background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #fff; }
-  .btn-ghost { background: var(--card); color: var(--text); border: 1px solid var(--border); }
-  .btn:hover { filter: brightness(1.1); }
-
-  /* Controls */
-  .controls {
-    display: flex; gap: 12px; margin: 32px 0 24px; flex-wrap: wrap; align-items: center;
+  .logo .mark {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, #2f6bff, #5b8cff);
+    display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
   }
   .search {
-    flex: 1; min-width: 200px; position: relative;
+    flex: 1; position: relative; max-width: 420px;
   }
+  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); opacity: .4; }
   .search input {
-    width: 100%; padding: 11px 14px 11px 38px; border-radius: 10px;
-    border: 1px solid var(--border); background: var(--card); color: var(--text);
-    font-size: 14px; outline: none;
+    width: 100%; padding: 9px 14px 9px 38px; border-radius: 9px;
+    border: 1px solid var(--border); background: #fafbfc; color: var(--text);
+    font-size: 14px; outline: none; transition: border-color .15s;
   }
-  .search input:focus { border-color: var(--accent); }
-  .search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); opacity: .5; }
-  .cats { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip {
-    padding: 7px 14px; border-radius: 20px; font-size: 12.5px; cursor: pointer;
-    background: var(--card); border: 1px solid var(--border); color: var(--text-dim);
-    transition: all .15s; user-select: none;
+  .search input:focus { border-color: var(--primary); background: #fff; }
+  .top-actions { margin-left: auto; display: flex; gap: 8px; }
+  .mini-btn {
+    border: 1px solid var(--border); background: #fff; color: var(--text-dim);
+    border-radius: 8px; padding: 7px 12px; font-size: 12.5px; cursor: pointer;
+    white-space: nowrap; transition: all .15s;
   }
-  .chip:hover { color: var(--text); }
-  .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .mini-btn:hover { color: var(--text); border-color: #cfd3da; }
+  .mini-btn.copied { color: var(--primary); border-color: var(--primary); }
 
-  /* Grid */
-  .grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 18px;
+  /* Layout */
+  .layout { max-width: 1180px; margin: 0 auto; padding: 24px; display: flex; gap: 24px; }
+  .sidebar {
+    width: 184px; flex-shrink: 0; position: sticky; top: 72px; align-self: flex-start;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 10px; box-shadow: var(--shadow);
   }
+  .side-title { font-size: 12px; color: var(--text-dim); padding: 8px 10px 6px; font-weight: 600; }
+  .cat-item {
+    display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 9px;
+    font-size: 14px; color: var(--text); cursor: pointer; transition: all .12s; user-select: none;
+  }
+  .cat-item:hover { background: #f3f4f6; }
+  .cat-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+  .cat-item .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .55; }
+
+  .main { flex: 1; min-width: 0; }
+  .main-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+  .main-head h2 { font-size: 17px; font-weight: 700; }
+  .main-head .count { font-size: 13px; color: var(--text-dim); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
   .app {
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
     padding: 18px; display: flex; flex-direction: column; gap: 12px;
-    transition: border-color .15s, transform .15s, background .15s;
+    transition: transform .15s, box-shadow .15s, border-color .15s; box-shadow: var(--shadow);
   }
-  .app:hover { border-color: var(--accent); transform: translateY(-3px); background: var(--card-hover); }
-  .app-head { display: flex; gap: 14px; align-items: flex-start; }
+  .app:hover { transform: translateY(-3px); border-color: #cfd6e4; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+  .app-top { display: flex; gap: 13px; align-items: center; }
   .app-icon {
-    width: 56px; height: 56px; border-radius: 13px; flex-shrink: 0;
-    object-fit: cover; background: #2a2e37; border: 1px solid var(--border);
+    width: 54px; height: 54px; border-radius: 13px; flex-shrink: 0; object-fit: cover;
+    background: #eef0f3; border: 1px solid var(--border);
   }
-  .app-title { font-size: 16px; font-weight: 700; }
-  .app-meta { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; }
-  .app-desc { font-size: 13.5px; color: var(--text-dim); line-height: 1.55; flex: 1; }
+  .app-name { font-size: 15.5px; font-weight: 700; }
+  .app-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .app-desc {
+    font-size: 13px; color: var(--text-dim); line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    min-height: 38px;
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag {
-    display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 6px;
-    background: rgba(79,140,255,0.15); color: var(--accent); margin: 0 6px 6px 0;
+    font-size: 11px; padding: 3px 9px; border-radius: 6px;
+    background: #f0f2f5; color: #5a6472;
   }
-  .app-foot { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
-  .ver { font-size: 11.5px; color: var(--text-dim); margin-right: auto; }
-  .download { background: var(--green); color: #08130c; }
-  .download:hover { filter: brightness(1.08); }
+  .app-foot { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 4px; }
+  .ver { font-size: 12px; color: var(--text-dim); margin-right: auto; }
+  .install {
+    background: var(--primary); color: #fff; border: none; border-radius: 9px;
+    padding: 8px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: background .15s;
+  }
+  .install:hover { background: var(--primary-hover); }
 
-  .empty { text-align: center; color: var(--text-dim); padding: 60px 0; font-size: 15px; }
-  footer { text-align: center; color: var(--text-dim); font-size: 12px; margin-top: 50px; }
+  .empty { text-align: center; color: var(--text-dim); padding: 70px 0; font-size: 15px; }
+
   .toast {
-    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px);
-    background: var(--green); color: #08130c; padding: 11px 22px; border-radius: 10px;
-    font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .25s;
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #1a1a1a; color: #fff; padding: 11px 22px; border-radius: 10px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 50;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 760px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; position: static; display: flex; gap: 6px; overflow-x: auto; }
+    .side-title { display: none; }
+    .cat-item { white-space: nowrap; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap" style="padding-bottom:0">
-    <h1 id="storeName">MyStore</h1>
-    <div class="sub" id="storeDesc">自托管 fnOS 应用分发源 · 支持 FnDepot 客户端</div>
-    <div class="author" id="storeAuthor"></div>
-    <div class="source-bar">
-      <code id="srcUrl">加载中…</code>
-      <button class="btn btn-primary" onclick="copySource()">复制源地址</button>
-      <button class="btn btn-ghost" onclick="copyAll()">复制全部应用</button>
-    </div>
-    <div class="page-bar">
-      <span class="page-label">📌 本商店地址（建议收藏）</span>
-      <code id="pageUrl">https://jiankujidu.github.io/mystore.github.io/</code>
-      <button class="btn btn-ghost" onclick="copyPage()">复制</button>
-    </div>
-  </div>
-</header>
-
-<div class="wrap">
-  <div class="controls">
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="logo"><span class="mark">M</span> MyStore</div>
     <div class="search">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input id="searchInput" type="text" placeholder="搜索应用…" oninput="render()">
+      <input id="searchInput" type="text" placeholder="搜索应用" oninput="render()">
+    </div>
+    <div class="top-actions">
+      <button class="mini-btn" id="btnSrc" onclick="copySource()">复制源地址</button>
+      <button class="mini-btn" id="btnPage" onclick="copyPage()">收藏本页</button>
     </div>
   </div>
-  <div class="cats" id="cats"></div>
-
-  <div class="grid" id="grid" style="margin-top:18px"></div>
-  <div class="empty" id="empty" style="display:none">没有匹配的应用</div>
 </div>
 
-<footer>
-  <div class="wrap" style="padding:0">
-    安装方式：下载 .fpk → 飞牛应用中心 → 手动安装；或在 FnDepot 客户端粘贴上方源地址。
-  </div>
-</footer>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="side-title">分类</div>
+    <div id="cats"></div>
+  </aside>
+
+  <main class="main">
+    <div class="main-head">
+      <h2 id="catTitle">全部应用</h2>
+      <span class="count" id="count"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">没有匹配的应用</div>
+  </main>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -185,89 +170,66 @@ let activeCat = '全部';
 
 async function load() {
   try {
-    const res = await fetch('fnpack.json', { cache: 'no-cache' });
-    DATA = await res.json();
+    DATA = await (await fetch('fnpack.json', { cache: 'no-cache' })).json();
   } catch (e) {
-    document.getElementById('grid').innerHTML =
-      '<div class="empty">无法加载 fnpack.json，请确认仓库已正确部署。</div>';
+    document.getElementById('grid').innerHTML = '<div class="empty">无法加载 fnpack.json</div>';
     return;
   }
-  document.getElementById('srcUrl').textContent = SOURCE_URL;
   const si = DATA.source_info || {};
-  document.getElementById('storeName').textContent = si.name || 'MyStore';
-  if (si.description) document.getElementById('storeDesc').textContent = si.description;
-  if (si.author) document.getElementById('storeAuthor').textContent = '维护者：' + si.author;
+  document.getElementById('catTitle').textContent = si.name || 'MyStore';
   buildCats();
   render();
 }
 
 function buildCats() {
-  const set = new Set(['全部']);
-  Object.values(DATA.apps || {}).forEach(a => (a.categories || []).forEach(c => set.add(c)));
+  const set = ['全部'];
+  Object.values(DATA.apps || {}).forEach(a => (a.categories || []).forEach(c => { if (!set.includes(c)) set.push(c); }));
   const el = document.getElementById('cats');
-  el.innerHTML = '';
-  [...set].forEach(c => {
-    const d = document.createElement('div');
-    d.className = 'chip' + (c === activeCat ? ' active' : '');
-    d.textContent = c;
-    d.onclick = () => { activeCat = c; buildCats(); render(); };
-    el.appendChild(d);
-  });
+  el.innerHTML = set.map(c =>
+    `<div class="cat-item ${c===activeCat?'active':''}" onclick="setCat('${c}')"><span class="dot"></span>${c}</div>`
+  ).join('');
 }
+function setCat(c) { activeCat = c; buildCats(); render(); }
 
 function render() {
   const q = (document.getElementById('searchInput').value || '').toLowerCase();
-  const grid = document.getElementById('grid');
   const apps = Object.entries(DATA.apps || {}).filter(([name, a]) => {
     const okCat = activeCat === '全部' || (a.categories || []).includes(activeCat);
-    const okQ = !q || (a.display_name || '').toLowerCase().includes(q) ||
-                (a.desc || '').toLowerCase().includes(q) || name.toLowerCase().includes(q);
+    const okQ = !q || (a.display_name||'').toLowerCase().includes(q) ||
+                (a.desc||'').toLowerCase().includes(q) || name.toLowerCase().includes(q);
     return okCat && okQ;
   });
+  document.getElementById('catTitle').textContent = activeCat;
+  document.getElementById('count').textContent = apps.length ? apps.length + ' 个应用' : '';
   document.getElementById('empty').style.display = apps.length ? 'none' : 'block';
-  grid.innerHTML = apps.map(([name, a]) => {
+  document.getElementById('grid').innerHTML = apps.map(([name, a]) => {
     const ver = Object.keys(a.releases || {})[0] || '';
     const pkg = (a.releases?.[ver]?.packages?.all) || Object.values(a.releases?.[ver]?.packages || {})[0] || {};
-    const icon = a.icon_url || ((DATA.__base || '') + 'icons/' + name + '/icon.png');
+    const icon = a.icon_url || 'icons/' + name + '/icon.png';
     const tags = (a.categories || []).map(c => `<span class="tag">${c}</span>`).join('');
     return `
     <div class="app">
-      <div class="app-head">
-        <img class="app-icon" src="${icon}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2256%22 height=%2256%22%3E%3Crect width=%2256%22 height=%2256%22 rx=%2213%22 fill=%22%232a2e37%22/%3E%3Ctext x=%2228%22 y=%2234%22 font-size=%2220%22 fill=%22%239aa0a6%22 text-anchor=%22middle%22%3E📦%3C/text%3E%3C/svg%3E'">
+      <div class="app-top">
+        <img class="app-icon" src="${icon}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2254%22 height=%2254%22%3E%3Crect width=%2254%22 height=%2254%22 rx=%2213%22 fill=%22%23eef0f3%22/%3E%3Ctext x=%2227%22 y=%2234%22 font-size=%2218%22 fill=%22%239aa0a6%22 text-anchor=%22middle%22%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E'">
         <div>
-          <div class="app-title">${a.display_name || name}</div>
-          <div class="app-meta">${a.maintainer ? 'by ' + a.maintainer + ' · ' : ''}${(a.platform||[]).join('/')}</div>
+          <div class="app-name">${a.display_name || name}</div>
+          <div class="app-sub">${a.maintainer ? 'by ' + a.maintainer : (a.platform||[]).join('/')}</div>
         </div>
       </div>
       <div class="app-desc">${a.desc || ''}</div>
-      <div>${tags}</div>
+      <div class="tags">${tags}</div>
       <div class="app-foot">
         <span class="ver">v${ver}</span>
-        <a class="btn download" href="${pkg.download_url || '#'}" download>下载 .fpk</a>
+        <a class="install" href="${pkg.download_url || '#'}" download>安装</a>
       </div>
     </div>`;
   }).join('');
 }
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1800);
-}
-function copySource() {
-  navigator.clipboard.writeText(SOURCE_URL).then(() => toast('已复制源地址'));
-}
-function copyPage() {
-  navigator.clipboard.writeText(location.href).then(() => toast('已复制本页地址'));
-}
-function copyAll() {
-  const lines = Object.entries(DATA.apps || {}).map(([n, a]) => {
-    const v = Object.keys(a.releases||{})[0]||'';
-    const p = Object.values(a.releases?.[v]?.packages||{})[0]||{};
-    return a.display_name + ' | ' + (p.download_url||'');
-  }).join('\n');
-  navigator.clipboard.writeText(lines).then(() => toast('已复制全部下载链接'));
-}
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
+function flash(btn) { const t = btn.textContent; btn.classList.add('copied'); btn.textContent = '已复制'; setTimeout(() => { btn.classList.remove('copied'); btn.textContent = t; }, 1500); }
+async function copySource() { await navigator.clipboard.writeText(SOURCE_URL); toast('已复制源地址'); flash(document.getElementById('btnSrc')); }
+async function copyPage() { await navigator.clipboard.writeText(location.href); toast('已复制本页地址'); flash(document.getElementById('btnPage')); }
 
 load();
 </script>
