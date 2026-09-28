@@ -7,5 +7,5 @@
   "install_type": "",
   "is_docker": false,
   "maintainer": "jiankujidu",
-  "changelog": "首发：内置商城客户端，在线浏览 + 下载 FPK"
+  "changelog": "全新 UI：对齐飞牛官方应用中心设计（侧边栏/轮播/详情页/设置）"
 }
