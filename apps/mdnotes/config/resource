@@ -1,0 +1,12 @@
+{
+  "data-share": {
+    "shares": [
+      {
+        "name": "hello-fn"
+      },
+      {
+        "name": "hello-fn/data"
+      }
+    ]
+  }
+}
