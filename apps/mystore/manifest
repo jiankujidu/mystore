@@ -1,5 +1,5 @@
 appname               = mystore
-version               = 1.1.2
+version               = 1.1.4
 display_name          = MyStore 应用商城
 desc                  = 飞牛 NAS 内置应用商城，浏览并下载 MyStore 仓库中的 .fpk 应用
 platform              = all
@@ -11,4 +11,5 @@ desktop_applaunchname = mystore.main
 ctl_stop              = true
 checkport             = false
 service_port          = 8011
-install_dep_apps      = python312
+# 1.1.3 起不再强制依赖 python312：cmd/main 自动回退 busybox httpd / node
+# install_dep_apps      = python312
