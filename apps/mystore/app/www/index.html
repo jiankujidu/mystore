@@ -350,6 +350,13 @@
       <div class="m-hint">仅在已安装应用发布新版本时提示更新，不影响日常使用。</div>
     </div>
     <div class="m-box">
+      <div class="m-k">写入飞牛 AppCenter 源（可选）</div>
+      <div class="m-hint" style="margin-top:0">
+        想让飞牛「应用中心」直接列出并安装本仓库全部应用：打开飞牛 AppCenter → 设置 → 应用仓库 → 添加源，填入上方软件源地址（以 /fnpack.json 结尾）。
+      </div>
+      <button class="btn btn-plain" id="btn-open-appcenter" style="margin-top:8px">复制源地址</button>
+    </div>
+    <div class="m-box">
       <div class="m-k">客户端版本</div>
       <div class="m-row"><div class="m-src" id="ver-show">-</div></div>
       <div class="m-hint">MyStore 客户端版本，用于定位你正在使用哪一版安装包。</div>
@@ -366,9 +373,9 @@
 <script>
 "use strict";
 /* ================= 配置 ================= */
-var DEFAULT_SOURCE = "https://jiankujidu.github.io/mystore.github.io/";
+var DEFAULT_SOURCE = "https://jiankujidu.github.io/mystore/";
 var LOCAL_SOURCE = "fnpack.json";
-var VERSION = "1.1.5";
+var VERSION = "1.1.6";
 var LS_INSTALLED = "mystore_installed_v1";
 var LS_SOURCE = "mystore_source_v1";
 // 实际软件源：用户自定义 > 默认。末尾规范化为带 / 的 base。
@@ -568,7 +575,7 @@ function cardEl(a){
   el.className = "card";
   var inst = isInstalled(a.id);
   var btn = '<button class="btn ' + (inst ? "btn-open" : "btn-install") + '" data-act="install" data-id="' + esc(a.id) + '">' +
-            (inst ? "已安装" : "安装") + '</button>';
+            (inst ? "已安装" : "装到 NAS") + '</button>';
   el.innerHTML =
     '<img class="card-icon" src="' + esc(a.icon) + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
     '<div class="card-info">' +
@@ -584,16 +591,25 @@ function cardEl(a){
 }
 function doInstall(a, btn){
   if (!a.url) { toast("下载地址不可用"); return; }
-  var link = document.createElement("a");
-  link.href = a.url; link.download = a.id + "-" + a.version + ".fpk";
-  document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  installed[a.id] = a.version; saveInstalled();
-  if (btn) {
-    btn.className = "btn btn-open"; btn.textContent = "已安装";
-    btn.title = "重新下载";
-  }
-  toast("已开始下载 " + a.name + " v" + a.version);
-  if (view === "installed" || $("#page-detail").style.display !== "none") setTimeout(refreshAfterInstall, 400);
+  // NAS 侧 CGI 安装：把 .fpk 装到飞牛上（而非下载到本机）
+  if (btn) { btn.disabled = true; btn.textContent = "安装中…"; }
+  fetch("install.cgi?fpk=" + encodeURIComponent(a.url), {cache:"no-store"})
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res && res.ok) {
+        installed[a.id] = a.version; saveInstalled();
+        toast(res.msg || ("已安装 " + a.name + " v" + a.version));
+        if (btn) { btn.textContent = "已安装"; btn.className = "btn btn-open"; btn.title = "重新安装"; }
+        setTimeout(refreshAfterInstall, 400);
+      } else {
+        toast("安装失败：" + ((res && res.error) || "未知错误") + "（详见日志）");
+        if (btn) { btn.disabled = false; btn.textContent = "安装"; }
+      }
+    })
+    .catch(function(e){
+      toast("安装请求失败：" + e.message + "（需安装 CGI 版 MyStore）");
+      if (btn) { btn.disabled = false; btn.textContent = "安装"; }
+    });
 }
 function refreshAfterInstall(){
   if (current) renderDetailButtons();
@@ -693,6 +709,11 @@ $("#btn-settings").addEventListener("click", function(){
   openModal("ov-settings");
 });
 $("#btn-copy-src").addEventListener("click", function(){ copyText($("#src-edit").value); });
+$("#btn-open-appcenter").addEventListener("click", function(){
+  var src = $("#src-edit").value.trim() || (DEFAULT_SOURCE + "fnpack.json");
+  copyText(src);
+  toast("源地址已复制 → 飞牛 AppCenter → 设置 → 应用仓库 → 添加源");
+});
 $("#btn-reset-src").addEventListener("click", function(){
   localStorage.removeItem(LS_SOURCE);
   $("#src-edit").value = DEFAULT_SOURCE + "fnpack.json";
