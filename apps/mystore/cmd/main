@@ -1,72 +1,104 @@
 #!/bin/bash
+# MyStore 端口服务模式启动脚本
+# fnOS 以 type:url + port 方式运行：本脚本 start 时拉起一个静态 HTTP 服务，
+# 监听 0.0.0.0:PORT，桌面图标 / 浏览器 NAS:PORT/ 即打开商城。
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
-
-# 服务端口（可自定义）：优先用 config/resource 注册的值，其次环境变量 APP_PORT，默认 8011
-DEFAULT_PORT=8011
-PORT="$DEFAULT_PORT"
-if [ -n "$TRIM_PKGVAR" ] && [ -f "${TRIM_PKGVAR}/config/resource" ]; then
-    P=$(grep -oE '"port"[[:space:]]*:[[:space:]]*[0-9]+' "${TRIM_PKGVAR}/config/resource" 2>/dev/null \
-        | grep -oE '[0-9]+' | head -1)
-    [ -n "$P" ] && PORT="$P"
-fi
-[ -n "$APP_PORT" ] && PORT="$APP_PORT"
-
-WEB_ROOT="${TRIM_PKGVAR}/www"
-# www 实际随应用安装到 /var/apps/mystore/target/www，TRIM_PKGVAR 是 /var/apps/mystore/var
-SERVE_DIR="/var/apps/mystore/target/www"
-if [ ! -d "${SERVE_DIR}" ]; then
-    SERVE_DIR="${WEB_ROOT}"
-fi
-
-# 启动命令：飞牛 fnOS（Debian 系）自带 python3，用它起静态 HTTP 服务
-# 监听 0.0.0.0:PORT，桌面点图标 / 直接访问 NAS 地址:PORT/ 即打开商城
-CMD="python3 -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR} 2>&1 || { echo 'python3 not available' >> ${LOG_FILE}; exec sleep 3600; }"
 
 log_msg() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> ${LOG_FILE}
 }
 
+# ---------- 端口解析（可自定义）----------
+DEFAULT_PORT=8011
+PORT="$DEFAULT_PORT"
+# 1) config/resource 注册的端口
+if [ -n "$TRIM_PKGVAR" ] && [ -f "${TRIM_PKGVAR}/config/resource" ]; then
+    P=$(grep -oE '"port"[[:space:]]*:[[:space:]]*[0-9]+' "${TRIM_PKGVAR}/config/resource" 2>/dev/null \
+        | grep -oE '[0-9]+' | head -1)
+    [ -n "$P" ] && PORT="$P"
+fi
+# 2) 环境变量
+[ -n "$APP_PORT" ] && PORT="$APP_PORT"
+log_msg "resolved PORT=${PORT}"
+
+# ---------- 服务目录探测（哪个含 index.html 用哪个）----------
+SERVE_DIR=""
+for cand in \
+    "/var/apps/mystore/target/www" \
+    "/var/apps/mystore/www" \
+    "${TRIM_PKGVAR}/../target/www" \
+    "${TRIM_PKGVAR}/www" \
+    "${WEB_ROOT}" ; do
+    if [ -n "$cand" ] && [ -f "${cand}/index.html" ]; then
+        SERVE_DIR="$cand"
+        break
+    fi
+done
+if [ -z "$SERVE_DIR" ]; then
+    # 兜底：找第一个含 index.html 的 www 目录
+    SERVE_DIR=$(find /var/apps/mystore -name index.html -path '*/www/*' 2>/dev/null | head -1 | xargs -r dirname 2>/dev/null)
+fi
+log_msg "SERVE_DIR=${SERVE_DIR}"
+
+# ---------- 运行时探测：python3 -> python -> busybox httpd ----------
+CMD=""
+if command -v python3 >/dev/null 2>&1; then
+    CMD="python3 -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR}"
+    RUNTIME="python3"
+elif command -v python >/dev/null 2>&1; then
+    CMD="python -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR}"
+    RUNTIME="python"
+elif command -v busybox >/dev/null 2>&1; then
+    CMD="busybox httpd -f -p ${PORT} -h ${SERVE_DIR}"
+    RUNTIME="busybox"
+else
+    RUNTIME=""
+fi
+log_msg "RUNTIME=${RUNTIME:-NONE}"
+
 start_process() {
     if status; then
+        log_msg "already running"
         return 0
     fi
+    if [ -z "$CMD" ]; then
+        log_msg "ERROR: no suitable HTTP runtime (python3/python/busybox) found; port ${PORT} cannot be opened"
+        # 保持进程存活以便 fnOS 不立即判定崩溃，但端口不可用
+        exec sleep 3600
+    fi
+    if [ -z "$SERVE_DIR" ] || [ ! -f "${SERVE_DIR}/index.html" ]; then
+        log_msg "ERROR: SERVE_DIR not found / index.html missing: '${SERVE_DIR}'"
+        exec sleep 3600
+    fi
 
-    log_msg "Starting process ..."
-    # run cmd to start process
+    log_msg "Starting: ${CMD}"
+    # 前台运行（由本脚本后台托管），日志落盘
     bash -c "${CMD}" >> ${LOG_FILE} 2>&1 &
-    # write pid to pidfile
     printf "%s" "$!" > ${PID_FILE}
-    # log_msg "CMD = ${CMD}"
-    # log_msg "pid = $!"
+    log_msg "launched pid=$!"
     return 0
 }
 
 stop_process() {
     log_msg "Stopping process ..."
-
     if [ -r "${PID_FILE}" ]; then
         pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
-        
         log_msg "pid=${pid}"
         if ! check_process "${pid}"; then
-            # process not exist, delete pidfile
             rm -f "${PID_FILE}"
             log_msg "remove pid file 1"
             return
         fi
-
         log_msg "send TERM signal to PID:${pid}..."
         kill -TERM ${pid} >> ${LOG_FILE} 2>&1
-
         local count=0
         while check_process "${pid}" && [ $count -lt 10 ]; do
             sleep 1
             count=$((count + 1))
             log_msg "waiting process terminal... (${count}s/10s)"
         done
-
         if check_process "${pid}"; then
             log_msg "send KILL signal to PID:${pid}..."
             kill -KILL "${pid}"
@@ -76,16 +108,15 @@ stop_process() {
             log_msg "process killed... "
         fi
     fi
-
     return 0
 }
 
 check_process() {
     local pid=$1
     if kill -0 "${pid}" 2>/dev/null; then
-        return 0  # process exist
+        return 0
     else
-        return 1  # process not exist
+        return 1
     fi
 }
 
@@ -95,28 +126,23 @@ status() {
         if check_process "${pid}"; then
             return 0
         else
-            # Process is not running but pidfile exists - clean it up
             rm -f "${PID_FILE}"
-        fi    
+        fi
     fi
-
     return 1
 }
 
 case $1 in
 start)
-    # run start command. exit 0 if success, exit 1 if failed
     start_process
     ;;
 stop)
-    # run stop command. exit 0 if success, exit 1 if failed
     stop_process
     ;;
 status)
-    # check application status command. exit 0 if running, exit 3 if not running
-    if status; then 
+    if status; then
         exit 0
-    else 
+    else
         exit 3
     fi
     ;;

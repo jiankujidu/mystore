@@ -1,5 +1,5 @@
 appname               = mystore
-version               = 1.1.0
+version               = 1.1.1
 display_name          = MyStore 应用商城
 desc                  = 飞牛 NAS 内置应用商城，浏览并下载 MyStore 仓库中的 .fpk 应用
 platform              = all
