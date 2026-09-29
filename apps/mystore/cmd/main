@@ -205,27 +205,40 @@ stop_process() {
     if [ -r "${PID_FILE}" ]; then
         pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
         log_msg "pid=${pid}"
-        if ! check_process "${pid}"; then
-            rm -f "${PID_FILE}"
-            log_msg "remove pid file 1"
-            return
+        # 同时杀整棵进程树：setsid 起的 httpd/python/node 可能有子进程，
+        # 或 PID_FILE 记的是 setsid 父进程而非真正 listen 的进程。
+        # 用 pkill -P 递归杀子进程 + kill 父，再按端口兜底。
+        kill_tree() {
+            local p=$1
+            [ -z "$p" ] && return
+            # 递归杀子进程
+            for c in $(pgrep -P "$p" 2>/dev/null); do
+                kill_tree "$c"
+            done
+            kill -TERM "$p" 2>/dev/null
+        }
+        if [ -n "$pid" ] && check_process "${pid}"; then
+            kill_tree "${pid}"
+            local count=0
+            while check_process "${pid}" && [ $count -lt 10 ]; do
+                sleep 1
+                count=$((count + 1))
+                log_msg "waiting process terminal... (${count}s/10s)"
+            done
+            if check_process "${pid}"; then
+                log_msg "send KILL signal to PID:${pid}..."
+                kill -KILL "${pid}" 2>/dev/null
+                for c in $(pgrep -P "${pid}" 2>/dev/null); do kill -KILL "$c" 2>/dev/null; done
+                sleep 1
+            fi
         fi
-        log_msg "send TERM signal to PID:${pid}..."
-        kill -TERM ${pid} >> "${LOG_FILE}" 2>&1
-        local count=0
-        while check_process "${pid}" && [ $count -lt 10 ]; do
-            sleep 1
-            count=$((count + 1))
-            log_msg "waiting process terminal... (${count}s/10s)"
-        done
-        if check_process "${pid}"; then
-            log_msg "send KILL signal to PID:${pid}..."
-            kill -KILL "${pid}"
-            sleep 1
-            rm -f "${PID_FILE}"
-        else
-            log_msg "process killed... "
-        fi
+        # 端口兜底：谁还在 listen PORT 就杀掉（避免卸载后残留）
+        pkill -f "httpd.*${PORT}" 2>/dev/null
+        pkill -f "http.server.*${PORT}" 2>/dev/null
+        pkill -f "serve.js.*${PORT}" 2>/dev/null
+        pkill -f "serve.sh.*${PORT}" 2>/dev/null
+        rm -f "${PID_FILE}"
+        log_msg "port=${PORT} pkill fallback done"
     fi
     return 0
 }
