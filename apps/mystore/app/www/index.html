@@ -343,6 +343,11 @@
       </div>
       <div class="m-hint">仅在已安装应用发布新版本时提示更新，不影响日常使用。</div>
     </div>
+    <div class="m-box">
+      <div class="m-k">客户端版本</div>
+      <div class="m-row"><div class="m-src" id="ver-show">-</div></div>
+      <div class="m-hint">MyStore 客户端版本，用于定位你正在使用哪一版安装包。</div>
+    </div>
     <div class="m-btns">
       <button class="btn btn-plain" data-close="ov-settings">取消</button>
       <button class="btn btn-primary" id="btn-save-settings" style="padding:9px 28px">确定</button>
@@ -381,7 +386,9 @@
 "use strict";
 /* ================= 配置 ================= */
 var STORE_BASE = "https://jiankujidu.github.io/mystore.github.io/";
-var SOURCES = ["fnpack.json", STORE_BASE + "fnpack.json"];
+var LOCAL_SOURCE = "fnpack.json";
+var SOURCES = [LOCAL_SOURCE, STORE_BASE + "fnpack.json"];
+var VERSION = "1.1.4";
 var LS_INSTALLED = "mystore_installed_v1";
 
 var CATS = [
@@ -403,6 +410,8 @@ var q = "";             // 搜索词
 var current = null;     // 详情页应用
 var lastView = "all";
 var installed = {};
+var loadSource = null;        // 实际命中数据来源：LOCAL_SOURCE | 线上 URL | null
+var loadFailed = false;      // 是否所有源都加载失败
 try { installed = JSON.parse(localStorage.getItem(LS_INSTALLED) || "{}") || {}; } catch(e){ installed = {}; }
 
 /* ================= 工具 ================= */
@@ -420,7 +429,10 @@ function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(
 function iconUrl(u){
   if (!u) return "";
   if (u.indexOf("http") === 0) return u;
-  return STORE_BASE + u.replace(/^\//, "");
+  // 跟随实际命中的数据来源：本地源用相对路径，线上源拼 STORE_BASE
+  if (loadSource && loadSource.indexOf("http") === 0)
+    return loadSource.replace(/\/?$/, "/") + u.replace(/^\//, "");
+  return u.replace(/^\//, "");
 }
 function saveInstalled(){ localStorage.setItem(LS_INSTALLED, JSON.stringify(installed)); }
 function isInstalled(id){ return !!installed[id]; }
@@ -443,15 +455,22 @@ function fallbackCopy(text){
 
 /* ================= 数据加载 ================= */
 function load(){
+  loadSource = null;
+  loadFailed = false;
   var i = 0;
   function tryNext(){
-    if (i >= SOURCES.length) { renderList(); return; }
+    if (i >= SOURCES.length) {
+      loadFailed = (APPS.length === 0);
+      renderList();
+      return;
+    }
     var url = SOURCES[i++];
     fetch(url, {cache:"no-cache"}).then(function(r){
       if (!r.ok) throw new Error(r.status);
       return r.json();
     }).then(function(data){
       if (!data || !data.apps) throw new Error("bad json");
+      loadSource = url;
       parse(data); renderCats(); renderList();
     }).catch(tryNext);
   }
@@ -527,12 +546,24 @@ function secTitle(){
 function renderList(){
   $("#page-detail").style.display = "none";
   $("#page-list").style.display = "";
-  $("#banners").style.display = (view === "all" && !q) ? "" : "none";
+  $("#banners").style.display = (view === "all" && !q && !loadFailed) ? "" : "none";
   var list = currentList();
   $("#sec-title").textContent = secTitle();
   $("#sec-count").textContent = list.length;
   var grid = $("#grid"); grid.innerHTML = "";
   var empty = $("#empty");
+  // 在线源加载失败且无数据 → 显示明确的失败态 + 重试按钮，避免误判为"空商店"
+  if (loadFailed && !list.length) {
+    empty.style.display = "";
+    grid.style.display = "none";
+    $("#empty-text").innerHTML =
+      "应用清单加载失败（在线源未连通）<br>" +
+      '<button class="btn btn-install" id="btn-retry" style="margin-top:10px">重新加载</button>';
+    var rb = $("#btn-retry");
+    if (rb) rb.addEventListener("click", load);
+    return;
+  }
+  grid.style.display = "";
   if (!list.length) {
     empty.style.display = "";
     $("#empty-text").textContent =
@@ -669,9 +700,9 @@ document.addEventListener("keydown", function(e){
 $("#btn-settings").addEventListener("click", function(){
   $("#src-url").textContent = new URL(SOURCES[1]).href;
   $("#sw-autoupd").checked = localStorage.getItem("mystore_autoupd") === "1";
+  $("#ver-show").textContent = "v" + VERSION;
   openModal("ov-settings");
-});
-$("#btn-copy-src").addEventListener("click", function(){ copyText(new URL(SOURCES[1]).href); });
+});$("#btn-copy-src").addEventListener("click", function(){ copyText(new URL(SOURCES[1]).href); });
 $("#btn-save-settings").addEventListener("click", function(){
   localStorage.setItem("mystore_autoupd", $("#sw-autoupd").checked ? "1" : "0");
   closeModal("ov-settings"); toast("设置已保存");
@@ -700,8 +731,53 @@ $("#fpk-file").addEventListener("change", function(){
   reader.readAsArrayBuffer(f);
 });
 
+/* 启动自动更新：开启时每 60s 静默复查在线源，已安装应用有新版本则提示 */
+var UPD_TIMER = null, UPD_CHECKED = false;
+function scheduleAutoUpdate(){
+  if (UPD_TIMER) clearInterval(UPD_TIMER);
+  UPD_TIMER = null;
+  if (localStorage.getItem("mystore_autoupd") !== "1") return;
+  UPD_TIMER = setInterval(checkForUpdates, 60000);
+  checkForUpdates();
+}
+function semver(v){ return (v || "0.0.0").split(".").map(function(n){ return parseInt(n, 10) || 0; }); }
+function isNewer(a, b){
+  if (!a || !b) return false;
+  var A = semver(a), B = semver(b);
+  for (var i = 0; i < 3; i++){
+    if ((A[i]||0) > (B[i]||0)) return true;
+    if ((A[i]||0) < (B[i]||0)) return false;
+  }
+  return false;
+}
+function checkForUpdates(){
+  fetch(SOURCES[1], {cache:"no-store"}).then(function(r){
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(function(data){
+    if (!data || !data.apps) return;
+    var online = {};
+    Object.keys(data.apps).forEach(function(id){
+      var rel = data.apps[id].releases || {};
+      var v = Object.keys(rel)[0];
+      if (v) online[id] = v;
+    });
+    var hasUpdate = false;
+    Object.keys(installed).forEach(function(id){
+      if (online[id] && isNewer(online[id], installed[id])) hasUpdate = true;
+    });
+    if (hasUpdate && !UPD_CHECKED) {
+      UPD_CHECKED = true;
+      toast("检测到已安装应用有新版本");
+      window.dispatchEvent(new CustomEvent("mystore:updateready"));
+    }
+  }).catch(function(){});
+}
+
 /* ================= 启动 ================= */
 load();
+scheduleAutoUpdate();
+$("#sw-autoupd").addEventListener("change", function(){ scheduleAutoUpdate(); });
 </script>
 </body>
 </html>
