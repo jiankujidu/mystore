@@ -188,6 +188,12 @@
     flex:1;font-size:12px;color:var(--text-2);background:#f7f8fa;border-radius:6px;
     padding:8px 10px;word-break:break-all;line-height:1.5;
   }
+  .src-input{
+    width:100%;font-size:12.5px;color:var(--text-1);background:#fff;
+    border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:inherit;
+    outline:none;transition:border-color .15s;
+  }
+  .src-input:focus{border-color:var(--primary)}
   .m-btns{display:flex;justify-content:flex-end;gap:12px;margin-top:20px}
   .m-wide{
     display:block;width:100%;text-align:center;background:#fff;border:1px solid var(--border);
@@ -255,10 +261,6 @@
       <div class="side-item" id="btn-settings">
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>
         <span>设置</span>
-      </div>
-      <div class="side-item" id="btn-manual">
-        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4m0 0 4 4m-4-4L8 8"/><path d="M4 16.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"/></svg>
-        <span>手动安装</span>
       </div>
     </div>
   </aside>
@@ -330,11 +332,15 @@
     <button class="modal-x" data-close="ov-settings">✕</button>
     <div class="m-box">
       <div class="m-k">软件源地址</div>
-      <div class="m-row">
-        <div class="m-src" id="src-url"></div>
-        <button class="btn btn-install" id="btn-copy-src">复制</button>
+      <div class="m-row" style="display:block">
+        <input type="text" id="src-edit" class="src-input" placeholder="https://你的域名/路径/fnpack.json" spellcheck="false">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-install" id="btn-copy-src">复制</button>
+          <button class="btn btn-plain" id="btn-reset-src">恢复默认</button>
+          <button class="btn btn-primary" id="btn-apply-src" style="margin-left:auto">保存并刷新</button>
+        </div>
       </div>
-      <div class="m-hint">将此地址填入飞牛 AppCenter（应用中心 → 设置 → 应用仓库）即可在线安装本仓库应用。</div>
+      <div class="m-hint">填写 fnpack.json 的完整地址（以 /fnpack.json 结尾）。修改后点「保存并刷新」立即切换软件源；留空点「恢复默认」。</div>
     </div>
     <div class="m-box">
       <div class="m-row">
@@ -355,41 +361,23 @@
   </div>
 </div>
 
-<!-- 手动安装弹窗 -->
-<div class="overlay hidden" id="ov-manual">
-  <div class="modal">
-    <h3>手动安装</h3>
-    <button class="modal-x" data-close="ov-manual">✕</button>
-    <div class="m-box">
-      <div class="m-k">上传 fpk 文件</div>
-      <button class="m-wide" id="btn-pick-fpk">从电脑上传</button>
-      <input type="file" id="fpk-file" accept=".fpk" style="display:none">
-      <div class="m-hint" id="fpk-info">选择本地 .fpk 安装包，可校验文件信息。</div>
-    </div>
-    <div class="m-box">
-      <div class="m-k">安装方式</div>
-      <div class="m-hint" style="margin-top:0">
-        1. 在飞牛桌打开「应用中心」→ 左下角「手动安装」；<br>
-        2. 选择刚下载的 .fpk 文件完成安装；<br>
-        3. 或在应用中心「设置 → 应用仓库」中添加软件源地址，即可在线安装。
-      </div>
-    </div>
-    <div class="m-btns">
-      <button class="btn btn-plain" data-close="ov-manual">关闭</button>
-    </div>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
 "use strict";
 /* ================= 配置 ================= */
-var STORE_BASE = "https://jiankujidu.github.io/mystore.github.io/";
+var DEFAULT_SOURCE = "https://jiankujidu.github.io/mystore.github.io/";
 var LOCAL_SOURCE = "fnpack.json";
-var SOURCES = [LOCAL_SOURCE, STORE_BASE + "fnpack.json"];
-var VERSION = "1.1.4";
+var VERSION = "1.1.5";
 var LS_INSTALLED = "mystore_installed_v1";
+var LS_SOURCE = "mystore_source_v1";
+// 实际软件源：用户自定义 > 默认。末尾规范化为带 / 的 base。
+function currentSourceBase(){
+  var s = localStorage.getItem(LS_SOURCE);
+  if (s) { s = s.replace(/\/$/, ""); return s + "/"; }
+  return DEFAULT_SOURCE;
+}
+function SOURCES(){ return [LOCAL_SOURCE, currentSourceBase() + "fnpack.json"]; }
 
 var CATS = [
   {name:"影音娱乐", icon:'<circle cx="12" cy="12" r="8.5"/><path d="m10 8.5 5.5 3.5-5.5 3.5z"/>'},
@@ -429,7 +417,7 @@ function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(
 function iconUrl(u){
   if (!u) return "";
   if (u.indexOf("http") === 0) return u;
-  // 跟随实际命中的数据来源：本地源用相对路径，线上源拼 STORE_BASE
+  // 跟随实际命中的数据来源：本地源用相对路径，线上源拼其 base
   if (loadSource && loadSource.indexOf("http") === 0)
     return loadSource.replace(/\/?$/, "/") + u.replace(/^\//, "");
   return u.replace(/^\//, "");
@@ -457,14 +445,15 @@ function fallbackCopy(text){
 function load(){
   loadSource = null;
   loadFailed = false;
+  var srcs = SOURCES();
   var i = 0;
   function tryNext(){
-    if (i >= SOURCES.length) {
+    if (i >= srcs.length) {
       loadFailed = (APPS.length === 0);
       renderList();
       return;
     }
-    var url = SOURCES[i++];
+    var url = srcs[i++];
     fetch(url, {cache:"no-cache"}).then(function(r){
       if (!r.ok) throw new Error(r.status);
       return r.json();
@@ -698,37 +687,34 @@ document.addEventListener("keydown", function(e){
 
 /* 设置 */
 $("#btn-settings").addEventListener("click", function(){
-  $("#src-url").textContent = new URL(SOURCES[1]).href;
+  $("#src-edit").value = localStorage.getItem(LS_SOURCE) || (DEFAULT_SOURCE + "fnpack.json");
   $("#sw-autoupd").checked = localStorage.getItem("mystore_autoupd") === "1";
   $("#ver-show").textContent = "v" + VERSION;
   openModal("ov-settings");
-});$("#btn-copy-src").addEventListener("click", function(){ copyText(new URL(SOURCES[1]).href); });
+});
+$("#btn-copy-src").addEventListener("click", function(){ copyText($("#src-edit").value); });
+$("#btn-reset-src").addEventListener("click", function(){
+  localStorage.removeItem(LS_SOURCE);
+  $("#src-edit").value = DEFAULT_SOURCE + "fnpack.json";
+  toast("已恢复默认源，点「保存并刷新」生效");
+});
+$("#btn-apply-src").addEventListener("click", function(){
+  var v = $("#src-edit").value.trim();
+  if (v) {
+    // 规范化：必须指向 fnpack.json；允许只填 base，自动补全
+    if (!/fnpack\.json($|\?)/.test(v)) v = v.replace(/\/?$/, "/") + "fnpack.json";
+    var base = v.replace(/fnpack\.json($|\?.*)?/, "");
+    localStorage.setItem(LS_SOURCE, base);
+  } else {
+    localStorage.removeItem(LS_SOURCE);
+  }
+  closeModal("ov-settings");
+  toast("软件源已切换，正在刷新");
+  APPS = []; load();
+});
 $("#btn-save-settings").addEventListener("click", function(){
   localStorage.setItem("mystore_autoupd", $("#sw-autoupd").checked ? "1" : "0");
   closeModal("ov-settings"); toast("设置已保存");
-});
-
-/* 手动安装 */
-$("#btn-manual").addEventListener("click", function(){ openModal("ov-manual"); });
-$("#btn-pick-fpk").addEventListener("click", function(){ $("#fpk-file").click(); });
-$("#fpk-file").addEventListener("change", function(){
-  var f = this.files[0]; if (!f) return;
-  var info = "已选择：" + f.name + "（" + fmtSize(f.size) + "）";
-  $("#fpk-info").textContent = info + " · 正在校验…";
-  if (!(window.crypto && crypto.subtle && window.isSecureContext)) {
-    $("#fpk-info").textContent = info; return;
-  }
-  var reader = new FileReader();
-  reader.onload = function(){
-    crypto.subtle.digest("SHA-256", reader.result).then(function(buf){
-      var hex = Array.prototype.map.call(new Uint8Array(buf), function(b){
-        return ("0" + b.toString(16)).slice(-2);
-      }).join("");
-      $("#fpk-info").textContent = info + "\nSHA-256: " + hex;
-      $("#fpk-info").style.whiteSpace = "pre-wrap";
-    });
-  };
-  reader.readAsArrayBuffer(f);
 });
 
 /* 启动自动更新：开启时每 60s 静默复查在线源，已安装应用有新版本则提示 */
@@ -751,7 +737,7 @@ function isNewer(a, b){
   return false;
 }
 function checkForUpdates(){
-  fetch(SOURCES[1], {cache:"no-store"}).then(function(r){
+  fetch(currentSourceBase() + "fnpack.json", {cache:"no-store"}).then(function(r){
     if (!r.ok) throw new Error(r.status);
     return r.json();
   }).then(function(data){
