@@ -40,8 +40,8 @@ jobs:
             --fnpack /usr/local/bin/fnpack \
             --source-name "MyStore" \
             --source-author "jiankujidu" \
-            --homepage "https://github.com/jiankujidu/mystore.github.io" \
-            --base-url "https://jiankujidu.github.io/mystore.github.io"
+            --homepage "https://github.com/jiankujidu/mystore" \
+            --base-url "https://jiankujidu.github.io/mystore"
 
       - name: Assemble site
         run: |
