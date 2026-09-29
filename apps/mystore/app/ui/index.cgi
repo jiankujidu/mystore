@@ -1,4 +1,5 @@
 #!/bin/bash
+# fnOS Web 网关入口：静态文件直接 cat；install.cgi 交给 bash 执行
 
 BASE_PATH="/var/apps/mystore/target/www"
 URI_NO_QUERY="${REQUEST_URI%%\?*}"
@@ -7,6 +8,18 @@ REL_PATH="/"
 case "$URI_NO_QUERY" in
   *index.cgi*)
     REL_PATH="${URI_NO_QUERY#*index.cgi}"
+    ;;
+esac
+
+# install.cgi：转交给 bash 执行（拥有 fnOS 系统权限，可调用 fpkg）
+case "$REL_PATH" in
+  /install.cgi|install.cgi)
+    BASE_PATH="$BASE_PATH" \
+    QUERY_STRING="${QUERY_STRING}" \
+    REQUEST_METHOD="${REQUEST_METHOD}" \
+    TRIM_PKGVAR="${TRIM_PKGVAR}" \
+    bash "$BASE_PATH/install.cgi"
+    exit 0
     ;;
 esac
 
