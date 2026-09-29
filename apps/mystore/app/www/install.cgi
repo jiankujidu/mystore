@@ -1,105 +1,114 @@
 #!/bin/bash
-# MyStore NAS 侧安装器 CGI
-# 由 fnOS Web 网关执行（拥有系统权限），把指定 .fpk 直接装到 NAS，
-# 而不是下载到用户浏览器。网页 JS fetch("install.cgi?fpk=<url>") 调用。
+# MyStore NAS 侧安装器 CGI（fnOS 官方机制）
+# 由 fnOS Web 网关执行，把指定 .fpk 直接装到 NAS，而不是下载到用户浏览器。
+# 网页 JS: fetch("install.cgi?fpk=<url>") 调用。
+#
+# 安装命令用 fnOS 预装的 appcenter-cli：  appcenter-cli install-fpk <file>
+# 也兜底探测 fpkg / fncgi 等历史包管理命令。
 #
 # 用法：GET /install.cgi?fpk=https://.../xxx.fpk
 # 返回：JSON  {"ok":true,"msg":"..."} 或 {"ok":false,"error":"..."}
 
-LOG="${TRIM_PKGVAR:-/var/apps/mystore/var}/install.log"
-STAMP="$(date '+%Y-%m-%d %H:%M:%S')"
+VAR_DIR="${TRIM_PKGVAR:-/var/apps/mystore/var}"
+LOG="${VAR_DIR}/install.log"
+mkdir -p "$VAR_DIR" 2>/dev/null
+STAMP() { date '+%Y-%m-%d %H:%M:%S'; }
+log() { echo "$(STAMP) $*" >> "$LOG"; }
 
-q() { printf '%s' "$1" | sed 's/&/\\&/g'; }
-out_json() { # $1=key $2=raw-value(未转义)
-    printf '{"%s":' "$1"
-    if [ "$1" = "ok" ]; then
-        [ "$2" = "true" ] && { echo "true"; exit 0; }
-        [ "$2" = "false" ] && { echo "false"; exit 0; }
-    fi
-    # string value, escape backslash + quote
-    v=$(printf '%s' "$2" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    echo "\"$v\""
+json_out() { # 打印并结束：$1 = 引号包裹的 JSON 体
+    echo "Content-Type: application/json; charset=utf-8"
+    echo ""
+    echo "$1"
     exit 0
 }
-fail() { echo "Content-Type: application/json"; echo ""; out_json "error" "$1"; }
+err() { log "ERROR: $1"; json_out "{\"ok\":false,\"error\":$(printf '%s' "$1" | sed 's/"/\\"/g' | sed 's/^/"'; echo '"')}"; }
 
-echo "Content-Type: application/json"
-echo ""
+# ---------- 只允许 GET ----------
+[ "${REQUEST_METHOD}" = "GET" ] && true || { log "method not allowed"; json_out '{"ok":false,"error":"method not allowed"}'; }
 
-# 仅允许 GET
-[ "${REQUEST_METHOD}" = "GET" ] || { echo '{"ok":false,"error":"method not allowed"}'; exit 0; }
-
-# 解析 query（取 fpk= 值）
+# ---------- 解析 fpk 参数 ----------
 QUERY="${QUERY_STRING:-${REQUEST_URI#*?}}"
 FPK=""
 if [ -n "$QUERY" ]; then
-    for pair in $(printf '%s' "$QUERY" | tr '&' ' '); do
-        [ "${pair%%=*}" = "fpk" ] && FPK="${pair#*=}"
-    done
+    while IFS='=' read -r k v; do
+        [ "$k" = "fpk" ] && FPK="$v"
+    done < <(printf '%s' "$QUERY" | tr '&' '\n')
+fi
+# 还原 %XX（仅处理 % 形式）
+if printf '%s' "$FPK" | grep -q '%'; then
+    FPK=$(printf '%s' "$FPK" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g' | xargs -0 -r printf '%b' 2>/dev/null || true)
 fi
 
-# URL 解码（只处理 % 形式，安全：白名单校验）
-FPK_DECODED=$(printf '%s' "$FPK" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g' | xargs -0 printf '%b' 2>/dev/null)
-[ -n "$FPK_DECODED" ] && FPK="$FPK_DECODED"
+[ -z "$FPK" ] && { log "missing fpk param"; json_out '{"ok":false,"error":"missing fpk param"}'; }
 
-[ -z "$FPK" ] && { echo '{"ok":false,"error":"missing fpk param"}'; exit 0; }
-
-# 安全：只允许 http/https 的 .fpk / 或 NAS 本地路径 /tmp 下的 .fpk
+# ---------- 白名单：只允许 http/https 的 .fpk 或 /tmp 本地路径 ----------
 case "$FPK" in
-  http://*.fpk|https://*.fpk|http://*.FPK|https://*.FPK) ;;
-  /tmp/*.fpk|/tmp/*.FPK) ;;
-  *) { echo '{"ok":false,"error":"fpk source not allowed"}'; exit 0; }
+  http://*|https://*) ;;
+  /tmp/*.fpk|/tmp/*.FPK|/tmp/*.tgz) ;;
+  *) log "fpk source not allowed: $FPK"; json_out '{"ok":false,"error":"fpk source not allowed"}' ;;
 esac
+log "install request fpk=$FPK"
 
-echo "$STAMP install.cgi fpk=$FPK" >> "$LOG"
-
-# 定位 fpkg / 下载工具
-FPKG=""
-for c in /usr/bin/fpkg /usr/local/bin/fpkg /opt/trim/bin/fpkg fpkg; do
-    command -v "$c" >/dev/null 2>&1 && { FPKG="$c"; break; }
-done
-[ -z "$FPKG" ] && {
-    echo "$STAMP ERROR: fpkg not found" >> "$LOG"
-    fail "fpkg not found on this NAS"
+# ---------- 定位安装命令 ----------
+find_cmd() {
+  for c in "$@"; do
+    if command -v "$c" >/dev/null 2>&1; then printf '%s' "$c"; return 0; fi
+    if [ -x "$c" ]; then printf '%s' "$c"; return 0; fi
+  done
+  return 1
 }
 
-# 下载到 NAS 临时目录
-TMP="${TRIM_PKGVAR:-/var/apps/mystore/var}/download"
-mkdir -p "$TMP" 2>/dev/null
-DL="$TMP/$(echo "$FPK" | md5sum | cut -d' ' -f1).fpk"
+# 主：appcenter-cli（fnOS 官方），子命令 install-fpk
+APPCLI="$(find_cmd /usr/bin/appcenter-cli /usr/local/bin/appcenter-cli /opt/trim/bin/appcenter-cli appcenter-cli)"
+# 兜底：fpkg（旧版/其它命名），子命令多为 add
+FPPKG="$(find_cmd /usr/bin/fpkg /usr/local/bin/fpkg /opt/trim/bin/fpkg fpkg)"
 
+# ---------- 准备安装文件（下载到 NAS 本地） ----------
+DL_DIR="${VAR_DIR}/download"
+mkdir -p "$DL_DIR" 2>/dev/null
 if [ "${FPK:0:8}" = "http://" ] || [ "${FPK:0:9}" = "https://" ]; then
-    echo "$STAMP downloading -> $DL" >> "$LOG"
+    DL="$DL_DIR/pkg-$(printf '%s' "$FPK" | md5sum | cut -d' ' -f1).fpk"
+    log "downloading -> $DL"
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$DL" "$FPK" 2>>"$LOG" || { echo "$STAMP download failed(curl)" >> "$LOG"; fail "download failed"; }
+        curl -fsSL --retry 3 -o "$DL" "$FPK" 2>>"$LOG" || { log "download failed (curl)"; err "download failed"; }
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$DL" "$FPK" 2>>"$LOG" || { echo "$STAMP download failed(wget)" >> "$LOG"; fail "download failed"; }
+        wget -q -O "$DL" "$FPK" 2>>"$LOG" || { log "download failed (wget)"; err "download failed"; }
     else
-        echo "$STAMP no curl/wget" >> "$LOG"; fail "no downloader available"
+        log "no curl/wget on NAS"; err "no downloader available on NAS"
     fi
-    [ -s "$DL" ] || { echo "$STAMP empty download" >> "$LOG"; fail "downloaded file empty"; }
-fi
-TMP_PKG="$FPK"
-[ -f "$FPK" ] && TMP_PKG="$FPK"
-
-# 以 root 权限安装（CGI 由 fnOS 网关以 root 运行；若无 root 则原样执行）
-INSTALLED_BY=""
-INSTALLED_BY_OUT="$STAMP"
-echo "$STAMP running install: $TMP_PKG" >> "$LOG"
-if sudo -n true >/dev/null 2>&1; then
-    sudo "$FPKG" add "$TMP_PKG" >>"$LOG" 2>&1 && INSTALLED_BY=ok || INSTALLED_BY=err
+    [ -s "$DL" ] || { log "download empty"; err "downloaded file empty"; }
+    PKG_PATH="$DL"
 else
-    "$FPKG" add "$TMP_PKG" >>"$LOG" 2>&1 && INSTALLED_BY=ok || INSTALLED_BY=err
+    PKG_PATH="$FPK"
 fi
-RC=$?
 
-# 清理
-[ "${FPK:0:8}" = "http://" ] || [ "${FPK:0:9}" = "https://" ] && rm -f "$DL" 2>/dev/null
+# ---------- 权限：尽量 root（sudo -n 免交互） ----------
+SUDO=""
+if [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    SUDO="sudo"
+    log "using sudo for install"
+fi
 
-if [ "$INSTALLED_BY" = "ok" ]; then
-    echo "$STAMP install OK ($FPK)" >> "$LOG"
-    echo '{"ok":true,"msg":"已安装到飞牛 NAS"}'
+# ---------- 执行安装 ----------
+RC=0
+if [ -n "$APPCLI" ]; then
+    log "installing via $SUDO $APPCLI install-fpk $PKG_PATH"
+    $SUDO "$APPCLI" install-fpk "$PKG_PATH" >>"$LOG" 2>&1; RC=$?
+elif [ -n "$FPPKG" ]; then
+    log "installing via $SUDO $FPPKG add $PKG_PATH"
+    $SUDO "$FPPKG" add "$PKG_PATH" >>"$LOG" 2>&1; RC=$?
 else
-    echo "$STAMP install FAILED rc=$RC ($FPK)" >> "$LOG"
-    fail "install failed (rc=$RC)"
+    log "no appcenter-cli/fpkg found"
+    err "appcenter-cli not found on this NAS"
+fi
+
+# ---------- 清理远程下载的临时包 ----------
+[ "$PKG_PATH" = "$DL" ] && rm -f "$DL" 2>/dev/null
+
+if [ "$RC" -eq 0 ]; then
+    log "install OK ($FPK)"
+    json_out '{"ok":true,"msg":"已安装到飞牛 NAS"}'
+else
+    log "install FAILED rc=$RC ($FPK)"
+    err "install failed (rc=$RC)"
 fi
