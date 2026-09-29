@@ -89,6 +89,22 @@ if [ "$(id -u)" != "0" ] && command -v sudo >/dev/null 2>&1 && sudo -n true >/de
     log "using sudo for install"
 fi
 
+# ---------- 判重：已装同 app 则不重复装 ----------
+# 从 fpk 文件名推断 appname（mystore-1.1.7.fpk -> mystore）
+APP_ID="$(basename "$FPK")"
+APP_ID="${APP_ID%.fpk}"; APP_ID="${APP_ID%.FPK}"
+APP_ID="${APP_ID##*-}"  # 去掉末尾 -版本号 留下 appname（若命名 app-x.y.z）
+# 兜底：保留原始 basename 作为 appid
+APP_NAME_GUESS="$APP_ID"
+if [ -n "$APPCLI" ]; then
+    LIST_OUT="$($SUDO "$APPCLI" list 2>>"$LOG" || true)"
+    # 匹配 appname（忽略大小写）：列出的每行里含该 appname 即已装
+    if printf '%s\n' "$LIST_OUT" | grep -qi "$APP_NAME_GUESS"; then
+        log "app '$APP_NAME_GUESS' already present; skipping install"
+        json_out "{\"ok\":true,\"msg\":\"已安装（检测到 NAS 上已有 $APP_NAME_GUESS），无需重复装\"}"
+    fi
+fi
+
 # ---------- 执行安装 ----------
 RC=0
 if [ -n "$APPCLI" ]; then
