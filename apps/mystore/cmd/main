@@ -1,14 +1,15 @@
 #!/bin/bash
 # MyStore 端口服务模式启动脚本 (fnOS)
-# fnOS 不会预装 python3：必须在 manifest 用 install_dep_apps=python312 声明依赖，
-# 依赖二进制在 /var/apps/python312/target/bin/python3（不在 PATH），需自行定位。
+# 不依赖任何外部运行时：优先 python3，其次 busybox httpd（fnOS 自带），
+# 再次 node；任一可用即把网页 www/index.html 以 0.0.0.0:PORT 暴露出来。
+# 这样即便 python312 依赖未安装，商店也能正常起服务。
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 APP_DIR="${TRIM_APPDEST}"
 
 log_msg() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}" 2>/dev/null
 }
 
 # ---------- 端口解析 ----------
@@ -34,39 +35,88 @@ done
 if [ -z "$SERVE_DIR" ]; then
     SERVE_DIR=$(find "${APP_DIR}" -name index.html -path '*/www/*' 2>/dev/null | head -1 | xargs -r dirname 2>/dev/null)
 fi
-log_msg "SERVE_DIR=${SERVE_DIR}"
+log_msg "SERVE_DIR=${SERVE_DIR:-NONE}"
 
-# ---------- 定位 python（依赖应用 python312 提供）----------
-PYTHON=""
-for cand in /var/apps/python312/target/bin/python3 /var/apps/python3*/target/bin/python3 /usr/bin/python3 python3; do
-    if [ -x "$cand" ] || command -v "$cand" >/dev/null 2>&1; then
-        PYTHON="$cand"
-        break
+# ---------- 运行时定位 ----------
+locate_python() {
+    for cand in /var/apps/python312/target/bin/python3 /var/apps/python3*/target/bin/python3 /usr/bin/python3 python3; do
+        if [ -x "$cand" ] || command -v "$cand" >/dev/null 2>&1; then echo "$cand"; return 0; fi
+    done
+    return 1
+}
+locate_busybox() {
+    for cand in /bin/busybox /sbin/busybox busybox; do
+        if [ -x "$cand" ]; then echo "$cand"; return 0; fi
+        if command -v "$cand" >/dev/null 2>&1; then echo "$cand"; return 0; fi
+    done
+    return 1
+}
+locate_node() {
+    for cand in /var/apps/nodejs_v22/target/bin/node /var/apps/nodejs*/target/bin/node /usr/bin/node node; do
+        if [ -x "$cand" ] || command -v "$cand" >/dev/null 2>&1; then echo "$cand"; return 0; fi
+    done
+    return 1
+}
+
+# 选择脱离方式：优先 setsid（新会话，避免被 fnOS 杀掉），否则 nohup
+DETACH="setsid"
+command -v setsid >/dev/null 2>&1 || DETACH="nohup"
+
+# 启动：在独立会话里 exec 命令，并把真实 PID 写入 PID_FILE
+launch() {
+    local cmd="$1"
+    "${DETACH}" bash -c "echo \$\$ > '${PID_FILE}'; exec ${cmd}" >> "${LOG_FILE}" 2>&1 &
+    sleep 0.3
+    if [ -s "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}" 2>/dev/null)" 2>/dev/null; then
+        log_msg "launched pid=$(cat "${PID_FILE}") backend=[$2]"
+        return 0
     fi
-done
-log_msg "PYTHON=${PYTHON:-NONE}"
+    log_msg "launch FAILED backend=[$2]: ${cmd}"
+    return 1
+}
 
 start_process() {
     if status; then
         log_msg "already running"
         return 0
     fi
-    if [ -z "$PYTHON" ]; then
-        echo "未找到 python 运行时。请在 manifest 声明 install_dep_apps=python312 并确保依赖已安装。" > "${TRIM_TEMP_LOGFILE}"
-        log_msg "ERROR: python runtime not found"
-        return 1
-    fi
     if [ -z "$SERVE_DIR" ] || [ ! -f "${SERVE_DIR}/index.html" ]; then
         echo "MyStore 网页目录未找到 (SERVE_DIR=${SERVE_DIR})。" > "${TRIM_TEMP_LOGFILE}"
         log_msg "ERROR: SERVE_DIR missing index.html"
         return 1
     fi
-    log_msg "Starting: ${PYTHON} -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR}"
-    # setsid 脱离会话，避免 cmd/main 退出后被 fnOS 杀掉；exec 使 PID 即 python 进程
-    setsid bash -c "exec ${PYTHON} -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR}" >> "${LOG_FILE}" 2>&1 &
-    printf "%s" "$!" > "${PID_FILE}"
-    log_msg "launched pid=$!"
-    return 0
+
+    # 1) python3
+    PY=$(locate_python 2>/dev/null)
+    if [ -n "$PY" ]; then
+        launch "${PY} -m http.server ${PORT} --bind 0.0.0.0 --directory ${SERVE_DIR}" "python" && return 0
+    fi
+
+    # 2) busybox httpd（fnOS 自带，无需外部依赖）
+    BB=$(locate_busybox 2>/dev/null)
+    if [ -n "$BB" ] && "${BB}" --list 2>/dev/null | grep -qx httpd; then
+        launch "${BB} httpd -f -p ${PORT} -h ${SERVE_DIR}" "busybox-httpd" && return 0
+    fi
+
+    # 3) node 兜底（生成极小静态服务器脚本）
+    NODE=$(locate_node 2>/dev/null)
+    if [ -n "$NODE" ]; then
+        local srv="${TRIM_PKGVAR}/serve.js"
+        cat > "${srv}" <<'EOF'
+const http=require('http'),fs=require('fs'),path=require('path');
+const dir=process.argv[2]||'.',port=process.argv[3]||8011;
+http.createServer((q,s)=>{
+  let u=q.url==='/'?'index.html':q.url.replace(/^\//,'');
+  try{s.end(fs.readFileSync(path.join(dir,u)));}
+  catch(e){s.statusCode=404;s.end('404');}
+}).listen(port,'0.0.0.0',()=>{});
+EOF
+        launch "${NODE} ${srv} ${SERVE_DIR} ${PORT}" "node" && return 0
+    fi
+
+    echo "未找到任何可用运行时（python3 / busybox httpd / node）。请检查 fnOS 基础环境。" > "${TRIM_TEMP_LOGFILE}"
+    log_msg "ERROR: no runtime available"
+    return 1
 }
 
 stop_process() {
