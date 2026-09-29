@@ -1,5 +1,69 @@
 #!/bin/bash
+# fnOS 卸载回调：清掉残留的 8011 端口服务进程。
+# 病根：卸载时 fnOS 只调 uninstall_callback（不调 cmd/main stop），
+# 而 setsid 起的 httpd/python/node/nc 子进程在 stop 路径之外，会漏杀、
+# 导致"卸载后 8011 还能访问"。这里按端口兜底全杀。
 
-### This script is called after the user uninstalls the application.
+APPNAME="${TRIM_APPNAME:-mystore}"
+LOG_FILE="${TRIM_PKGVAR}/uninstall.log"
 
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [uninstall_callback] $1" >> "${LOG_FILE}" 2>/dev/null
+}
+
+# 默认端口（与 cmd/main 一致）
+DEFAULT_PORT=8011
+PORT="${TRIM_SERVICE_PORT:-$DEFAULT_PORT}"
+[ -z "$PORT" ] && PORT="$DEFAULT_PORT"
+if [ -n "$TRIM_PKGVAR" ] && [ -f "${TRIM_PKGVAR}/config/resource" ]; then
+    P=$(grep -oE '"port"[[:space:]]*:[[:space:]]*[0-9]+' "${TRIM_PKGVAR}/config/resource" 2>/dev/null \
+        | grep -oE '[0-9]+' | head -1)
+    [ -n "$P" ] && PORT="$P"
+fi
+log "PORT=${PORT}"
+
+# ---------- 1. 杀 PID_FILE 里记的进程树 ----------
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+if [ -r "${PID_FILE}" ]; then
+    pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+    log "PID_FILE pid=${pid}"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        # 递归杀子进程
+        for c in $(pgrep -P "$pid" 2>/dev/null); do
+            log "kill child ${c}"
+            kill -TERM "$c" 2>/dev/null
+        done
+        kill -TERM "$pid" 2>/dev/null
+        sleep 1
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -KILL "$pid" 2>/dev/null
+            for c in $(pgrep -P "$pid" 2>/dev/null); do kill -KILL "$c" 2>/dev/null; done
+        fi
+    fi
+    rm -f "${PID_FILE}"
+    log "PID_FILE cleared"
+fi
+
+# ---------- 2. 按端口兜底：谁还在 listen 就杀 ----------
+log "pkill by port ${PORT}"
+pkill -f "httpd.*${PORT}" 2>/dev/null
+pkill -f "http.server.*${PORT}" 2>/dev/null
+pkill -f "serve.js.*${PORT}" 2>/dev/null
+pkill -f "serve.sh.*${PORT}" 2>/dev/null
+pkill -f "nc.*-l.*${PORT}" 2>/dev/null
+sleep 1
+
+# ---------- 3. 再杀一次（KILL 信号，确保死透）----------
+pkill -9 -f "httpd.*${PORT}" 2>/dev/null
+pkill -9 -f "http.server.*${PORT}" 2>/dev/null
+pkill -9 -f "serve.js.*${PORT}" 2>/dev/null
+pkill -9 -f "serve.sh.*${PORT}" 2>/dev/null
+pkill -9 -f "nc.*-l.*${PORT}" 2>/dev/null
+log "pkill -9 by port ${PORT}"
+
+# ---------- 4. 清掉自生成的 serve.js / serve.sh ----------
+[ -n "$TRIM_PKGVAR" ] && rm -f "${TRIM_PKGVAR}/serve.js" "${TRIM_PKGVAR}/serve.sh" 2>/dev/null
+log "cleaned serve.js/serve.sh"
+
+log "done"
 exit 0
